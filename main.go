@@ -56,6 +56,37 @@ func (server TCPServer) Broadcast(message string) {
 	}
 }
 
+func (server *TCPServer) handleRequest(conn net.Conn) {
+	fmt.Println("New Connection!")
+	c := make(chan string)
+	server.channels = append(server.channels, c)
+
+	for {
+		message := <-c
+		_, err := conn.Write([]byte(message))
+		if err != nil {
+			fmt.Printf("Error: %s\n", err.Error())
+			break
+		}
+	}
+
+	i := server.indexOf(c)
+	server.channels = append(server.channels[:i], server.channels[i+1:]...)
+
+	conn.Close()
+	close(c)
+	fmt.Println("Connection closed!")
+}
+
+func (server TCPServer) indexOf(val chan string) int {
+	for i, el := range server.channels {
+		if el == val {
+			return i
+		}
+	}
+	return -1
+}
+
 func main() {
 
 	//read port
@@ -92,34 +123,4 @@ func readInput(server *TCPServer) {
 		}
 		server.Broadcast(message)
 	}
-}
-
-func (server *TCPServer) handleRequest(conn net.Conn) {
-	fmt.Println("New Connection!")
-	c := make(chan string)
-	server.channels = append(server.channels, c)
-	for {
-		message := <-c
-		_, err := conn.Write([]byte(message))
-		if err != nil {
-			fmt.Printf("Error: %s\n", err.Error())
-			break
-		}
-	}
-
-	i := server.indexOf(c)
-	fmt.Println(i)
-	server.channels = append(server.channels[:i], server.channels[i+1:]...)
-
-	conn.Close()
-	fmt.Println("Connection closed!")
-}
-
-func (server TCPServer) indexOf(val chan string) int {
-	for i, el := range server.channels {
-		if el == val {
-			return i
-		}
-	}
-	return -1
 }
