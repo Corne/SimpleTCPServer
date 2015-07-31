@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -13,34 +14,30 @@ const (
 	CONN_TYPE = "tcp"
 )
 
-var (
-	channels []chan string = []chan string{}
-)
+type TCPServer struct {
+	Host     string
+	Port     int
+	channels []chan string
+}
 
-func main() {
+func Create(host string, port int) *TCPServer {
+	return &TCPServer{
+		Host:     host,
+		Port:     port,
+		channels: []chan string{},
+	}
+}
 
-	//read port
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Port: ")
-	port, err := reader.ReadString('\n')
-	port = strings.TrimSpace(port)
-
+func (server *TCPServer) Start() {
+	listener, err := net.Listen(CONN_TYPE, fmt.Sprintf("%s:%d", server.Host, server.Port))
 	if err != nil {
 		fmt.Printf("Error: %s\n", err.Error())
 		os.Exit(1)
 	}
-	// listen on given  localhost to given port
-	listener, err := net.Listen(CONN_TYPE, CONN_HOST+":"+port)
-	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
-		os.Exit(1)
-	}
-
 	defer listener.Close()
-	fmt.Printf("Listening on %s:%s\n", CONN_HOST, port)
 
-	go readInput()
-	// handle each incoming request
+	fmt.Printf("Listening on %s:%d\n", server.Host, server.Port)
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -48,11 +45,43 @@ func main() {
 			continue
 		}
 
-		go handleRequest(conn)
+		go server.handleRequest(conn)
 	}
 }
 
-func readInput() {
+func (server TCPServer) Broadcast(message string) {
+	fmt.Println("Broadcast")
+	for _, c := range server.channels {
+		c <- message
+	}
+}
+
+func main() {
+
+	//read port
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Port: ")
+	readed, err := reader.ReadString('\n')
+	readed = strings.TrimSpace(readed)
+
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	port, err := strconv.ParseInt(readed, 0, 0)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	server := Create(CONN_HOST, int(port))
+	go server.Start()
+	readInput(server)
+
+}
+
+func readInput(server *TCPServer) {
 	for {
 		reader := bufio.NewReader(os.Stdin)
 		message, err := reader.ReadString('\n')
@@ -61,16 +90,14 @@ func readInput() {
 			fmt.Printf("Error: %s\n", err.Error())
 			return
 		}
-		for _, c := range channels {
-			c <- message
-		}
+		server.Broadcast(message)
 	}
 }
 
-func handleRequest(conn net.Conn) {
+func (server *TCPServer) handleRequest(conn net.Conn) {
+	fmt.Println("New Connection!")
 	c := make(chan string)
-	channels = append(channels, c)
-
+	server.channels = append(server.channels, c)
 	for {
 		message := <-c
 		_, err := conn.Write([]byte(message))
@@ -80,15 +107,16 @@ func handleRequest(conn net.Conn) {
 		}
 	}
 
-	i := indexOf(c)
+	i := server.indexOf(c)
 	fmt.Println(i)
-	channels = append(channels[:i], channels[i+1:]...)
+	server.channels = append(server.channels[:i], server.channels[i+1:]...)
 
 	conn.Close()
+	fmt.Println("Connection closed!")
 }
 
-func indexOf(val chan string) int {
-	for i, el := range channels {
+func (server TCPServer) indexOf(val chan string) int {
+	for i, el := range server.channels {
 		if el == val {
 			return i
 		}
