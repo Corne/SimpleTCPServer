@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/corne/tcpserver/models"
+	"github.com/corne/tcpserver"
 )
 
 func main() {
